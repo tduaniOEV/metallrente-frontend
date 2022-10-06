@@ -1,0 +1,100 @@
+name: Integration
+
+on:
+  pull_request:
+    branches:
+      - '**'
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - '**/*.md'
+  push:
+    branches:
+      - main
+      - development
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  cache:
+    name: Yarn Cache
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Commit
+        uses: actions/checkout@v2
+      - name: Cache yarn dependencies
+        uses: actions/cache@v2
+        id: yarn-cache
+        with:
+          path: |
+            node_modules
+          key: ${{ runner.os }}-yarn-v1-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-v1
+      - name: Install dependencies if cache invalid
+        if: steps.yarn-cache.outputs.cache-hit != 'true'
+        run: yarn
+
+  lint:
+    name: esLint
+    runs-on: ubuntu-latest
+    needs: [cache]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Restore yarn dependencies
+        uses: actions/cache@v2
+        id: yarn-cache
+        with:
+          path: |
+            node_modules
+          key: ${{ runner.os }}-yarn-v1-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-v1
+      - name: eslint
+        run: yarn lint
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: [cache]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Restore yarn dependencies
+        uses: actions/cache@v2
+        id: yarn-cache
+        with:
+          path: |
+            node_modules
+          key: ${{ runner.os }}-yarn-v1-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-v1
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+      - name: Start storybook
+        run: npm run storybook </dev/null &>/dev/null &
+      - name: Run unit tests
+        run: yarn test --coverage -u
+      - name: Archive code coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage
+          path: coverage
+
+  sonarcloud:
+    name: SonarCloud
+    needs: [lint, unit-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+      - name: Download code coverage report
+        uses: actions/download-artifact@v3
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

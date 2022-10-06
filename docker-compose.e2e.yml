@@ -1,0 +1,11 @@
+version: '3.18'
+
+services:
+  e2e-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    volumes:
+      - type: bind
+        source: ./tests
+        target: /tests

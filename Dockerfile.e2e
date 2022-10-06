@@ -1,0 +1,14 @@
+FROM mcr.microsoft.com/playwright
+# RUN useradd myservice
+COPY package.json yarn.lock ./
+
+RUN yarn
+
+COPY . .
+# RUN chown myservice:myservice tests -R
+ADD tests/e2e/run.sh .
+
+RUN yarn build
+
+# RUN ./run.sh
+CMD ./run.sh
